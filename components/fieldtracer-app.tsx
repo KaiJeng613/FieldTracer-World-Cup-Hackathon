@@ -268,7 +268,7 @@ export function FieldTracerApp() {
   const inspected = positions.find(({ player }) => player.id === inspectedPlayerId);
   const homeKit = activePlayers.find((player) => player.team === "home")!.kit;
   const awayKit = activePlayers.find((player) => player.team === "away")!.kit;
-  const selectedHighlight = activeHighlights.find((highlight) => highlight.id === selectedHighlightId) || activeHighlights[0];
+  const selectedHighlight = activeHighlights.length > 0 ? (activeHighlights.find((highlight) => highlight.id === selectedHighlightId) || activeHighlights[0]) : null;
   const replayProgress = selectedHighlight ? Math.max(0, Math.min(1, (second - selectedHighlight.startSecond) / (selectedHighlight.endSecond - selectedHighlight.startSecond))) : 0;
   const liveOrbitAngle = camera === "Orbit" && playing ? (orbitAngle + replayProgress * 42) % 360 : orbitAngle;
 
@@ -277,7 +277,7 @@ export function FieldTracerApp() {
   const adjustZoom = (change: number) => setPitchZoom((current) => Math.max(.75, Math.min(1.6, Number((current + change).toFixed(2)))));
 
   const playHighlight = (highlightId: string) => {
-    const highlight = highlights.find((item) => item.id === highlightId);
+    const highlight = activeHighlights.find((item) => item.id === highlightId);
     if (!highlight) return;
     setSelectedHighlightId(highlight.id);
     setSelectedPlayer(highlight.playerId);
@@ -556,7 +556,7 @@ export function FieldTracerApp() {
                 </g>
               </svg>
               <div className="pitch-caption"><span><i /> TXLINE EVENT</span><strong>{currentEvent.title}</strong><small>{Math.abs(currentEvent.second - second) < 12 ? currentEvent.detail : "Interpolating between recorded events"}</small></div>
-              {camera === "Orbit" && <div className="replay-360-badge"><Rotate3D size={14} /><div><strong>360° REPLAY</strong><span>{selectedHighlight.scorer} · {selectedHighlight.score}</span></div></div>}
+              {camera === "Orbit" && selectedHighlight && <div className="replay-360-badge"><Rotate3D size={14} /><div><strong>360° REPLAY</strong><span>{selectedHighlight.scorer} · {selectedHighlight.score}</span></div></div>}
               {inspected && <aside className="player-stats-panel" aria-live="polite">
                 <div className="player-stats-head"><div className="player-avatar">{inspected.player.number}</div><div><span>{inspected.player.team === "home" ? "FRANCE" : "MOROCCO"}</span><strong>{inspected.player.name}</strong><small>{inspected.player.txlinePlayerId ? `TxLINE ID ${inspected.player.txlinePlayerId}` : "TxLINE identity unresolved"}</small></div></div>
                 <div className="stats-source"><Database size={13} /><span>TXLINE PLAYER STATS</span><b>{inspected.player.txlinePlayerId ? "RESOLVED" : "LIMITED"}</b></div>

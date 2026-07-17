@@ -110,7 +110,7 @@ export async function getReplayMoment(
     }
 
     // Handle both legacy and versioned transactions
-    const message = tx.transaction.message;
+    const message = tx.transaction.message as any;
     
     // Type guard to check message type
     let instructions: any[];
