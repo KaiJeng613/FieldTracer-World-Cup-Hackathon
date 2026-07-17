@@ -148,7 +148,7 @@ export function FieldTracerApp() {
   const [selectedFixtureId, setSelectedFixtureId] = useState(18209181);
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [currentFixtureData, setCurrentFixtureData] = useState<ParsedFixtureData | null>(null);
-  const [selectedHighlightId, setSelectedHighlightId] = useState("");
+  const [selectedHighlightId, setSelectedHighlightId] = useState(defaultHighlights[1].id);
   const [showSaveMomentDialog, setShowSaveMomentDialog] = useState(false);
   const [savingMoment, setSavingMoment] = useState(false);
   const [savedMoment, setSavedMoment] = useState<ReplayMoment | null>(null);
@@ -156,14 +156,15 @@ export function FieldTracerApp() {
   const previousRef = useRef<number>(0);
 
   // Use current fixture data or fall back to defaults
+  // Always use defaults for the France vs Morocco match (18209181)
   const activeMatch = currentFixtureData?.match || matches[0];
-  const events = currentFixtureData?.events || defaultEvents;
-  const highlights = currentFixtureData?.highlights || defaultHighlights;
-  const players = currentFixtureData?.players || defaultPlayers;
+  const events = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.events : defaultEvents;
+  const highlights = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.highlights : defaultHighlights;
+  const players = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.players : defaultPlayers;
 
   // Initialize selectedHighlightId when highlights change
   useEffect(() => {
-    if (highlights.length > 0 && !selectedHighlightId) {
+    if (highlights.length > 0 && !highlights.find(h => h.id === selectedHighlightId)) {
       setSelectedHighlightId(highlights[0].id);
     }
   }, [highlights, selectedHighlightId]);
@@ -179,6 +180,14 @@ export function FieldTracerApp() {
 
   useEffect(() => {
     // Load fixture details when a different fixture is selected
+    // Skip loading for the default France vs Morocco match (18209181) - use hardcoded data
+    if (selectedFixtureId === 18209181) {
+      setCurrentFixtureData(null); // Use defaults
+      setSecond(3922); // Reset to default time
+      setPlaying(false);
+      return;
+    }
+
     setLoadingFixture(true);
     
     fetch(`/api/txline/fixture/${selectedFixtureId}`)
@@ -422,30 +431,23 @@ export function FieldTracerApp() {
               <div><span className="eyebrow">MATCH HIGHLIGHTS</span><h2 id="match-highlights-title">Choose an exciting moment</h2></div>
               <div className="highlight-source"><Database size={13} /> Goal time + scorer from TxLINE</div>
             </div>
-            {highlights.length > 0 ? (
-              <div className="highlight-carousel">
-                {highlights.map((highlight, index) => (
-                  <article className={`highlight-card ${selectedHighlightId === highlight.id ? "selected" : ""}`} key={highlight.id}>
-                    <button className="highlight-select" onClick={() => { setSelectedHighlightId(highlight.id); jumpTo(highlight.second); setSelectedPlayer(highlight.playerId); }}>
-                      <span className="highlight-minute">{Math.floor(highlight.second / 60)}&prime;</span>
-                      <span className="highlight-icon"><Goal size={17} /></span>
-                      <span className="highlight-copy"><small>GOAL {index + 1} &middot; {highlight.score}</small><strong>{highlight.scorer}</strong><span>{highlight.title}</span></span>
-                      <span className="feed-badge">TX</span>
-                    </button>
-                    <button className="watch-360" onClick={() => playHighlight(highlight.id)}><Rotate3D size={15} /> Watch 360&deg;</button>
-                  </article>
-                ))}
-                <div className="orbit-control">
-                  <div><Rotate3D size={16} /><span><strong>Camera orbit</strong><small>Drag to inspect the reconstructed play</small></span><b>{Math.round(liveOrbitAngle)}&deg;</b></div>
-                  <input aria-label="360 degree replay camera angle" type="range" min="0" max="359" value={orbitAngle} onChange={(event) => { setOrbitAngle(Number(event.target.value)); setCamera("Orbit"); }} />
-                </div>
+            <div className="highlight-carousel">
+              {highlights.map((highlight, index) => (
+                <article className={`highlight-card ${selectedHighlightId === highlight.id ? "selected" : ""}`} key={highlight.id}>
+                  <button className="highlight-select" onClick={() => { setSelectedHighlightId(highlight.id); jumpTo(highlight.second); setSelectedPlayer(highlight.playerId); }}>
+                    <span className="highlight-minute">{Math.floor(highlight.second / 60)}&prime;</span>
+                    <span className="highlight-icon"><Goal size={17} /></span>
+                    <span className="highlight-copy"><small>GOAL {index + 1} &middot; {highlight.score}</small><strong>{highlight.scorer}</strong><span>{highlight.title}</span></span>
+                    <span className="feed-badge">TX</span>
+                  </button>
+                  <button className="watch-360" onClick={() => playHighlight(highlight.id)}><Rotate3D size={15} /> Watch 360&deg;</button>
+                </article>
+              ))}
+              <div className="orbit-control">
+                <div><Rotate3D size={16} /><span><strong>Camera orbit</strong><small>Drag to inspect the reconstructed play</small></span><b>{Math.round(liveOrbitAngle)}&deg;</b></div>
+                <input aria-label="360 degree replay camera angle" type="range" min="0" max="359" value={orbitAngle} onChange={(event) => { setOrbitAngle(Number(event.target.value)); setCamera("Orbit"); }} />
               </div>
-            ) : (
-              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--muted)" }}>
-                <p style={{ margin: 0, fontSize: "11px" }}>No highlights available for this match</p>
-                <p style={{ margin: "8px 0 0", fontSize: "9px" }}>Goal events will appear here when available from TxLINE</p>
-              </div>
-            )}
+            </div>
           </section>
 
           <div className="viewer panel">
