@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import Image from "next/image";
 import { ExplorerView } from "@/components/explorer-view";
+import { SaveMomentDialog } from "@/components/save-moment-dialog";
 import {
   Activity,
   BadgeCheck,
+  Bookmark,
   Bot,
   Box,
   ChevronDown,
@@ -36,6 +38,7 @@ import {
 } from "lucide-react";
 import { ballAt, events as defaultEvents, formatClock, highlights as defaultHighlights, matches, nearestEvent, playerAt, players as defaultPlayers, type JerseyKit, type MatchEvent, type MatchEventType, type MatchHighlight, type MatchSummary, type Player } from "@/lib/fieldtracer";
 import { parseTxLineFixture, type ParsedFixtureData } from "@/lib/txline-parser";
+import { saveReplayMoment, type ReplayMoment } from "@/lib/replay-moments";
 
 type Camera = "Tactical" | "Broadcast" | "Orbit";
 type LayerKey = "paths" | "network" | "pressure" | "offside";
@@ -122,6 +125,7 @@ function PlayerFigure({ player, selected }: { player: Player; selected: boolean 
 
 export function FieldTracerApp() {
   const wallet = useWallet();
+  const { connection } = useConnection();
   const mounted = useSyncExternalStore(subscribeToHydration, () => true, () => false);
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "dark";
@@ -145,6 +149,9 @@ export function FieldTracerApp() {
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [currentFixtureData, setCurrentFixtureData] = useState<ParsedFixtureData | null>(null);
   const [selectedHighlightId, setSelectedHighlightId] = useState("");
+  const [showSaveMomentDialog, setShowSaveMomentDialog] = useState(false);
+  const [savingMoment, setSavingMoment] = useState(false);
+  const [savedMoment, setSavedMoment] = useState<ReplayMoment | null>(null);
   const frameRef = useRef<number | null>(null);
   const previousRef = useRef<number>(0);
 
@@ -278,6 +285,49 @@ export function FieldTracerApp() {
     }
   }, [second, wallet]);
 
+  const saveMoment = useCallback(async () => {
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      alert("Please connect your wallet to save moments");
+      return;
+    }
+
+    const momentData: Omit<ReplayMoment, "savedAt" | "signature"> = {
+      fixtureId: activeMatch.fixtureId,
+      timestamp: Math.floor(second),
+      second,
+      camera,
+      selectedPlayerId: selectedPlayer,
+      teams: {
+        home: activeMatch.home,
+        away: activeMatch.away,
+        score: `${activeMatch.homeScore}-${activeMatch.awayScore}`,
+      },
+      description: `${activeMatch.home} vs ${activeMatch.away} at ${Math.floor(second / 60)}'`,
+    };
+
+    setShowSaveMomentDialog(true);
+    setSavingMoment(true);
+    setSavedMoment(null);
+
+    try {
+      const signature = await saveReplayMoment(wallet, connection, momentData);
+      
+      const savedMomentWithSig: ReplayMoment = {
+        ...momentData,
+        savedAt: Date.now(),
+        signature,
+      };
+
+      setSavedMoment(savedMomentWithSig);
+    } catch (error) {
+      console.error("Failed to save moment:", error);
+      alert("Failed to save moment. Please try again.");
+      setShowSaveMomentDialog(false);
+    } finally {
+      setSavingMoment(false);
+    }
+  }, [wallet, connection, activeMatch, second, camera, selectedPlayer]);
+
   const runSearch = (value: string) => {
     setQuery(value);
     const lower = value.toLowerCase();
@@ -404,6 +454,28 @@ export function FieldTracerApp() {
                 {(["Tactical", "Broadcast", "Orbit"] as Camera[]).map((view) => <button key={view} onClick={() => setCamera(view)} className={camera === view ? "active" : ""}>{view === "Orbit" ? <Rotate3D size={15} /> : <Eye size={15} />}{view === "Orbit" ? "360° replay" : view}</button>)}
               </div>
               <div className="viewer-actions">
+                <button
+                  onClick={saveMoment}
+                  disabled={!wallet.connected}
+                  title={wallet.connected ? "Save this moment on-chain" : "Connect wallet to save moments"}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 11px",
+                    background: wallet.connected ? "rgba(184, 239, 37, 0.12)" : "rgba(255, 255, 255, 0.04)",
+                    border: `1px solid ${wallet.connected ? "rgba(184, 239, 37, 0.3)" : "rgba(132, 171, 255, 0.16)"}`,
+                    borderRadius: "8px",
+                    color: wallet.connected ? "#b8ef25" : "#8998bd",
+                    fontSize: "9px",
+                    fontWeight: 600,
+                    cursor: wallet.connected ? "pointer" : "not-allowed",
+                    opacity: wallet.connected ? 1 : 0.6,
+                  }}
+                >
+                  <Bookmark size={14} />
+                  Save Moment
+                </button>
                 <div className="zoom-controls" aria-label="Board zoom controls">
                   <button aria-label="Zoom out" disabled={pitchZoom <= .75} onClick={() => adjustZoom(-.15)}><ZoomOut size={15} /></button>
                   <button className="zoom-value" aria-label="Reset board zoom" title="Reset zoom" onClick={() => setPitchZoom(1)}>{Math.round(pitchZoom * 100)}%</button>
@@ -523,6 +595,14 @@ export function FieldTracerApp() {
           <div className="layers-card panel"><div className="section-title"><div><span className="eyebrow">VIEW CONTROL</span><h3>Tactical layers</h3></div><Layers3 size={19}/></div><div className="layer-grid"><LayerButton active={layers.paths} label="Running paths" onClick={() => toggleLayer("paths")}/><LayerButton active={layers.pressure} label="Pressure radius" onClick={() => toggleLayer("pressure")}/><LayerButton active={layers.network} label="Passing network" onClick={() => toggleLayer("network")}/><LayerButton active={layers.offside} label="Offside line" onClick={() => toggleLayer("offside")}/></div><div className="source-note"><Box size={15}/><span>Positions are reconstructed for this MVP. TxLINE events remain source-authentic.</span></div></div>
         </aside>
       </section>}
+      
+      <SaveMomentDialog
+        isOpen={showSaveMomentDialog}
+        onClose={() => setShowSaveMomentDialog(false)}
+        moment={savedMoment}
+        isSaving={savingMoment}
+        network={status?.network.includes("dev") ? "devnet" : "mainnet"}
+      />
     </main>
   );
 }
