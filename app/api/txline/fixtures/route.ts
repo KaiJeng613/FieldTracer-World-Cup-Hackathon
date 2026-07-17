@@ -9,6 +9,7 @@ export async function GET() {
 
   if (!jwt || !apiToken) {
     // Return demo/fallback data if not configured
+    // Always ensure France vs Morocco is first
     return NextResponse.json({
       mode: "demo",
       fixtures: [
@@ -42,19 +43,27 @@ export async function GET() {
     // Transform TxLINE data to match expected format
     const fixtures = Array.isArray(data) ? data : data.fixtures || [];
     
+    const transformedFixtures = fixtures.map((fixture: any) => ({
+      fixtureId: fixture.fixtureId || fixture.fixture_id || fixture.id,
+      home: fixture.homeTeam || fixture.home_team || fixture.home || "Unknown",
+      away: fixture.awayTeam || fixture.away_team || fixture.away || "Unknown",
+      homeCode: (fixture.homeCode || fixture.home_code || fixture.homeTeam || fixture.home || "UNK").slice(0, 3).toUpperCase(),
+      awayCode: (fixture.awayCode || fixture.away_code || fixture.awayTeam || fixture.away || "UNK").slice(0, 3).toUpperCase(),
+      homeScore: fixture.homeScore ?? fixture.home_score ?? fixture.scoreHome ?? 0,
+      awayScore: fixture.awayScore ?? fixture.away_score ?? fixture.scoreAway ?? 0,
+      stage: fixture.stage || fixture.round || "Match",
+      status: fixture.status || "Completed",
+    }));
+
+    // Ensure France vs Morocco (18209181) is always first if it exists
+    const franceMatch = transformedFixtures.find((f: any) => f.fixtureId === 18209181);
+    const otherMatches = transformedFixtures.filter((f: any) => f.fixtureId !== 18209181);
+    
+    const sortedFixtures = franceMatch ? [franceMatch, ...otherMatches] : transformedFixtures;
+    
     return NextResponse.json({
       mode: "live",
-      fixtures: fixtures.map((fixture: any) => ({
-        fixtureId: fixture.fixtureId || fixture.fixture_id || fixture.id,
-        home: fixture.homeTeam || fixture.home_team || fixture.home || "Unknown",
-        away: fixture.awayTeam || fixture.away_team || fixture.away || "Unknown",
-        homeCode: (fixture.homeCode || fixture.home_code || fixture.homeTeam || fixture.home || "UNK").slice(0, 3).toUpperCase(),
-        awayCode: (fixture.awayCode || fixture.away_code || fixture.awayTeam || fixture.away || "UNK").slice(0, 3).toUpperCase(),
-        homeScore: fixture.homeScore ?? fixture.home_score ?? fixture.scoreHome ?? 0,
-        awayScore: fixture.awayScore ?? fixture.away_score ?? fixture.scoreAway ?? 0,
-        stage: fixture.stage || fixture.round || "Match",
-        status: fixture.status || "Completed",
-      })),
+      fixtures: sortedFixtures,
     });
   } catch (error) {
     console.error("Failed to fetch fixtures from TxLINE:", error);

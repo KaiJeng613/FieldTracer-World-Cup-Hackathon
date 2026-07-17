@@ -13,6 +13,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ fi
   const origin = (process.env.TXLINE_API_ORIGIN || "https://txline-dev.txodds.com").replace(/\/$/, "");
 
   if (!jwt || !apiToken) {
+    // For the default France match, return a message indicating to use hardcoded data
+    if (fixtureId === "18209181") {
+      return NextResponse.json(
+        { 
+          error: "TxLINE credentials not configured. Using hardcoded France vs Morocco data.",
+          mode: "demo",
+          fixtureId: 18209181 
+        },
+        { status: 200 }
+      );
+    }
+    
     return NextResponse.json(
       { error: "TxLINE credentials are not configured", mode: "demo" },
       { status: 503 },

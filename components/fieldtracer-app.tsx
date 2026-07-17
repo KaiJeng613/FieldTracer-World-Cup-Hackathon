@@ -173,9 +173,21 @@ export function FieldTracerApp() {
     fetch("/api/txline/status").then((response) => response.json()).then(setStatus).catch(() => undefined);
     fetch("/api/txline/fixtures").then((response) => response.json()).then((data) => {
       if (data.fixtures && data.fixtures.length > 0) {
-        setRecentMatches(data.fixtures);
+        // Ensure France vs Morocco (18209181) is always first
+        const franceMorocco = data.fixtures.find((f: MatchSummary) => f.fixtureId === 18209181);
+        const otherFixtures = data.fixtures.filter((f: MatchSummary) => f.fixtureId !== 18209181);
+        
+        if (franceMorocco) {
+          setRecentMatches([franceMorocco, ...otherFixtures]);
+        } else {
+          // If France match not in API response, add it manually at the start
+          setRecentMatches([matches[0], ...data.fixtures]);
+        }
       }
-    }).catch(() => undefined);
+    }).catch(() => {
+      // If API fails, use default matches with France first
+      setRecentMatches(matches);
+    });
   }, []);
 
   useEffect(() => {
