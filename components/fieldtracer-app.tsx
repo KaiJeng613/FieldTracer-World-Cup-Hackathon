@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
+import Image from "next/image";
+import { ExplorerView } from "@/components/explorer-view";
 import {
   Activity,
   BadgeCheck,
@@ -13,6 +15,7 @@ import {
   Crosshair,
   Database,
   Eye,
+  Goal,
   Gauge,
   Layers3,
   ListFilter,
@@ -28,12 +31,15 @@ import {
   Users,
   Wallet,
   Zap,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
-import { ballAt, events, formatClock, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEventType, type Player } from "@/lib/fieldtracer";
+import { ballAt, events, formatClock, highlights, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEventType, type Player } from "@/lib/fieldtracer";
 
 type Camera = "Tactical" | "Broadcast" | "Orbit";
 type LayerKey = "paths" | "network" | "pressure" | "offside";
 type Theme = "dark" | "light";
+type AppView = "replay" | "explorer";
 type ApiStatus = { configured: boolean; mode: "live" | "demo"; network: string; message: string };
 
 const MAX_SECONDS = 5765;
@@ -120,12 +126,17 @@ export function FieldTracerApp() {
     if (typeof window === "undefined") return "dark";
     return window.localStorage.getItem("fieldtracer-theme") === "light" ? "light" : "dark";
   });
+  const [activeView, setActiveView] = useState<AppView>("replay");
   const [second, setSecond] = useState(3922);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [camera, setCamera] = useState<Camera>("Tactical");
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({ paths: true, network: false, pressure: true, offside: false });
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(10);
+  const [hoveredPlayer, setHoveredPlayer] = useState<number | null>(null);
+  const [pitchZoom, setPitchZoom] = useState(1);
+  const [selectedHighlightId, setSelectedHighlightId] = useState(highlights[1].id);
+  const [orbitAngle, setOrbitAngle] = useState(18);
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [proofState, setProofState] = useState<"idle" | "signing" | "signed" | "unsupported">("idle");
   const [query, setQuery] = useState("");
@@ -143,9 +154,12 @@ export function FieldTracerApp() {
       previousRef.current = now;
       setSecond((current) => {
         const next = current + delta * speed * 9;
-        if (next >= MAX_SECONDS) {
+        const selectedHighlight = highlights.find((highlight) => highlight.id === selectedHighlightId);
+        const insideHighlight = selectedHighlight && current >= selectedHighlight.startSecond - 1 && current <= selectedHighlight.endSecond;
+        const replayEnd = camera === "Orbit" && insideHighlight ? selectedHighlight.endSecond : MAX_SECONDS;
+        if (next >= replayEnd) {
           setPlaying(false);
-          return MAX_SECONDS;
+          return replayEnd;
         }
         return next;
       });
@@ -154,17 +168,32 @@ export function FieldTracerApp() {
     previousRef.current = performance.now();
     frameRef.current = requestAnimationFrame(tick);
     return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
-  }, [playing, speed]);
+  }, [camera, playing, selectedHighlightId, speed]);
 
   const currentEvent = useMemo(() => nearestEvent(second), [second]);
   const ball = useMemo(() => ballAt(second), [second]);
   const positions = useMemo(() => players.map((player) => ({ player, ...playerAt(player, second) })), [second]);
-  const selected = positions.find(({ player }) => player.id === selectedPlayer);
+  const inspectedPlayerId = hoveredPlayer ?? selectedPlayer;
+  const inspected = positions.find(({ player }) => player.id === inspectedPlayerId);
   const homeKit = players.find((player) => player.team === "home")!.kit;
   const awayKit = players.find((player) => player.team === "away")!.kit;
+  const selectedHighlight = highlights.find((highlight) => highlight.id === selectedHighlightId) || highlights[0];
+  const replayProgress = Math.max(0, Math.min(1, (second - selectedHighlight.startSecond) / (selectedHighlight.endSecond - selectedHighlight.startSecond)));
+  const liveOrbitAngle = camera === "Orbit" && playing ? (orbitAngle + replayProgress * 42) % 360 : orbitAngle;
 
   const toggleLayer = (key: LayerKey) => setLayers((current) => ({ ...current, [key]: !current[key] }));
   const jumpTo = (value: number) => { setSecond(value); setPlaying(false); };
+  const adjustZoom = (change: number) => setPitchZoom((current) => Math.max(.75, Math.min(1.6, Number((current + change).toFixed(2)))));
+
+  const playHighlight = (highlightId: string) => {
+    const highlight = highlights.find((item) => item.id === highlightId);
+    if (!highlight) return;
+    setSelectedHighlightId(highlight.id);
+    setSelectedPlayer(highlight.playerId);
+    setCamera("Orbit");
+    setSecond(highlight.startSecond);
+    setPlaying(true);
+  };
 
   const signReplay = useCallback(async () => {
     if (!wallet.publicKey || !wallet.signMessage) {
@@ -207,8 +236,8 @@ export function FieldTracerApp() {
   return (
     <main className={`app-shell theme-${theme}`}>
       <header className="topbar">
-        <div className="brand"><div className="brand-mark"><Crosshair size={22} /></div><div><strong>FIELDTRACER</strong><span>Match intelligence</span></div></div>
-        <nav><button className="active">Replay studio</button><button>Explorer</button><button>Live desk</button></nav>
+        <div className="brand"><div className="brand-mark"><Image src="/fieldtracer-logo.png" alt="FieldTracer international football" width={42} height={42} priority /></div><div><strong>FIELDTRACER</strong><span>Match intelligence</span></div></div>
+        <nav><button className={activeView === "replay" ? "active" : ""} onClick={() => setActiveView("replay")}>Replay studio</button><button className={activeView === "explorer" ? "active" : ""} onClick={() => setActiveView("explorer")}>Explorer</button><button disabled title="Live desk is coming next">Live desk</button></nav>
         <div className="top-actions">
           <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
@@ -217,7 +246,7 @@ export function FieldTracerApp() {
         </div>
       </header>
 
-      <section className="workspace">
+      {activeView === "explorer" ? <ExplorerView onOpenReplay={() => setActiveView("replay")} /> : <section className="workspace">
         <aside className="left-rail panel">
           <div className="rail-heading"><div><span className="eyebrow">WORLD CUP 2026</span><h2>Replay library</h2></div><button aria-label="Filter matches" className="icon-button"><ListFilter size={17} /></button></div>
           <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search moments…" /></label>
@@ -244,22 +273,56 @@ export function FieldTracerApp() {
             <button aria-label="Show match details" className="more-button"><ChevronDown size={18} /></button>
           </div>
 
+          <section className="highlights-panel panel" aria-labelledby="match-highlights-title">
+            <div className="highlights-heading">
+              <div><span className="eyebrow">MATCH HIGHLIGHTS</span><h2 id="match-highlights-title">Choose an exciting moment</h2></div>
+              <div className="highlight-source"><Database size={13} /> Goal time + scorer from TxLINE</div>
+            </div>
+            <div className="highlight-carousel">
+              {highlights.map((highlight, index) => (
+                <article className={`highlight-card ${selectedHighlightId === highlight.id ? "selected" : ""}`} key={highlight.id}>
+                  <button className="highlight-select" onClick={() => { setSelectedHighlightId(highlight.id); jumpTo(highlight.second); setSelectedPlayer(highlight.playerId); }}>
+                    <span className="highlight-minute">{Math.floor(highlight.second / 60)}&prime;</span>
+                    <span className="highlight-icon"><Goal size={17} /></span>
+                    <span className="highlight-copy"><small>GOAL {index + 1} &middot; {highlight.score}</small><strong>{highlight.scorer}</strong><span>{highlight.title}</span></span>
+                    <span className="feed-badge">TX</span>
+                  </button>
+                  <button className="watch-360" onClick={() => playHighlight(highlight.id)}><Rotate3D size={15} /> Watch 360&deg;</button>
+                </article>
+              ))}
+              <div className="orbit-control">
+                <div><Rotate3D size={16} /><span><strong>Camera orbit</strong><small>Drag to inspect the reconstructed play</small></span><b>{Math.round(liveOrbitAngle)}&deg;</b></div>
+                <input aria-label="360 degree replay camera angle" type="range" min="0" max="359" value={orbitAngle} onChange={(event) => { setOrbitAngle(Number(event.target.value)); setCamera("Orbit"); }} />
+              </div>
+            </div>
+          </section>
+
           <div className="viewer panel">
             <div className="viewer-toolbar">
               <div className="camera-group">
-                {(["Tactical", "Broadcast", "Orbit"] as Camera[]).map((view) => <button key={view} onClick={() => setCamera(view)} className={camera === view ? "active" : ""}>{view === "Orbit" ? <Rotate3D size={15} /> : <Eye size={15} />}{view}</button>)}
+                {(["Tactical", "Broadcast", "Orbit"] as Camera[]).map((view) => <button key={view} onClick={() => setCamera(view)} className={camera === view ? "active" : ""}>{view === "Orbit" ? <Rotate3D size={15} /> : <Eye size={15} />}{view === "Orbit" ? "360° replay" : view}</button>)}
               </div>
-              <div className="reconstruction-label"><Sparkles size={14} /> Reconstructed movement</div>
+              <div className="viewer-actions">
+                <div className="zoom-controls" aria-label="Board zoom controls">
+                  <button aria-label="Zoom out" disabled={pitchZoom <= .75} onClick={() => adjustZoom(-.15)}><ZoomOut size={15} /></button>
+                  <button className="zoom-value" aria-label="Reset board zoom" title="Reset zoom" onClick={() => setPitchZoom(1)}>{Math.round(pitchZoom * 100)}%</button>
+                  <button aria-label="Zoom in" disabled={pitchZoom >= 1.6} onClick={() => adjustZoom(.15)}><ZoomIn size={15} /></button>
+                </div>
+                <div className="reconstruction-label"><Sparkles size={14} /> Reconstructed movement</div>
+              </div>
             </div>
 
-            <div className={`pitch-stage camera-${camera.toLowerCase()}`}>
+            <div className={`pitch-stage camera-${camera.toLowerCase()} ${camera === "Orbit" ? "is-360-replay" : ""}`} style={{ "--orbit-angle": `${liveOrbitAngle}deg`, "--pitch-zoom": pitchZoom } as CSSProperties}>
               <svg className="pitch" viewBox="0 0 1050 680" role="img" aria-label="Interactive football pitch replay">
                 <defs>
                   <radialGradient id="pressureHome"><stop offset="0" stopColor="#6dff8d" stopOpacity=".28"/><stop offset="1" stopColor="#6dff8d" stopOpacity="0"/></radialGradient>
                   <radialGradient id="pressureAway"><stop offset="0" stopColor="#ff806c" stopOpacity=".25"/><stop offset="1" stopColor="#ff806c" stopOpacity="0"/></radialGradient>
                   <linearGradient id="homeJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={homeKit.primary}/><stop offset=".58" stopColor={homeKit.primary}/><stop offset="1" stopColor={homeKit.shadow}/></linearGradient>
                   <linearGradient id="awayJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={awayKit.primary}/><stop offset=".58" stopColor={awayKit.primary}/><stop offset="1" stopColor={awayKit.shadow}/></linearGradient>
-                  <filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                  <radialGradient id="ballShell" cx="32%" cy="25%" r="78%"><stop offset="0" stopColor="#ffffff"/><stop offset=".68" stopColor="#f7f8fb"/><stop offset="1" stopColor="#c8ced8"/></radialGradient>
+                  <linearGradient id="ballPanel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#337fbe"/><stop offset="1" stopColor="#164f8b"/></linearGradient>
+                  <clipPath id="ballClip"><circle r="11"/></clipPath>
+                  <filter id="ballShadow" x="-70%" y="-70%" width="240%" height="240%"><feDropShadow dx="1.2" dy="2" stdDeviation="1.8" floodColor="#020713" floodOpacity=".65"/></filter>
                 </defs>
                 <rect className="pitch-ground" x="8" y="8" width="1034" height="664" rx="8" />
                 {[1,2,3,4,5,6,7,8,9].map((line) => <rect key={line} className={line % 2 ? "grass-a" : "grass-b"} x={8 + (line - 1) * 115} y="8" width="115" height="664" />)}
@@ -277,15 +340,42 @@ export function FieldTracerApp() {
                 {layers.offside && <line className="offside-line" x1="764" x2="764" y1="22" y2="658" />}
                 {layers.paths && <g className="movement-paths">{positions.filter((_, index) => index % 2 === 0).map(({ player, x, y }) => { const old = playerAt(player, second - 70); return <path key={player.id} d={`M ${old.x * 10.5} ${old.y * 6.8} Q ${(old.x + x) * 5.25 + Math.sin(player.id) * 25} ${(old.y + y) * 3.4} ${x * 10.5} ${y * 6.8}`} />; })}</g>}
                 {positions.map(({ player, x, y }) => (
-                  <g key={player.id} className={`player-token ${player.team} ${selectedPlayer === player.id ? "selected" : ""}`} transform={`translate(${x * 10.5} ${y * 6.8})`} onClick={() => setSelectedPlayer(player.id)} role="button" tabIndex={0}>
-                    <PlayerFigure player={player} selected={selectedPlayer === player.id} />
-                    {(selectedPlayer === player.id || player.id === 10 || player.id === 13) && <g className="player-label"><rect x="-36" y="-37" width="72" height="18" rx="5"/><text y="-24">{player.name}</text></g>}
+                  <g key={player.id} className={`player-token ${player.team} ${inspectedPlayerId === player.id ? "selected" : ""}`} transform={`translate(${x * 10.5} ${y * 6.8})`} onClick={() => setSelectedPlayer(player.id)} onMouseEnter={() => setHoveredPlayer(player.id)} onMouseLeave={() => setHoveredPlayer(null)} onFocus={() => setHoveredPlayer(player.id)} onBlur={() => setHoveredPlayer(null)} role="button" tabIndex={0} aria-label={`Inspect ${player.name}`}>
+                    <PlayerFigure player={player} selected={inspectedPlayerId === player.id} />
+                    {(inspectedPlayerId === player.id || player.id === 10 || player.id === 13) && <g className="player-label"><rect x="-36" y="-37" width="72" height="18" rx="5"/><text y="-24">{player.name}</text></g>}
                   </g>
                 ))}
-                <g className="ball" transform={`translate(${ball.x * 10.5} ${ball.y * 6.8})`} filter="url(#glow)"><circle r="8"/><circle r="2"/></g>
+                <g className="ball" transform={`translate(${ball.x * 10.5} ${ball.y * 6.8})`}>
+                  <ellipse className="ball-ground-shadow" cx="1" cy="10" rx="10" ry="3.6" />
+                  <g className="ball-spin" transform={`rotate(${second * 2})`} filter="url(#ballShadow)">
+                    <circle className="ball-shell" r="11" fill="url(#ballShell)" />
+                    <g clipPath="url(#ballClip)">
+                      <path className="ball-center-panel" fill="url(#ballPanel)" d="M0-5 L4.8-1.5 L3 4 L-3 4 L-4.8-1.5Z" />
+                      <path className="ball-color-panel green" d="M-5.8-10.5 L0-12 L5.8-10.5 L3.3-7 L0-5 L-3.3-7Z" />
+                      <path className="ball-color-panel blue" d="M-11-4.7 L-8-8 L-5.2-6.5 L-4.8-1.5 L-9.2 1Z" />
+                      <path className="ball-color-panel red" d="M11 3.8 L8.2 8.8 L4.8 8.2 L3 4 L7.7 1.4Z" />
+                      <path className="ball-seams" d="M0-5 L0-11 M4.8-1.5 L10-3.5 M3 4 L6.2 9 M-3 4 L-6.2 9 M-4.8-1.5 L-10-3.5" />
+                      <path className="ball-accents" d="M-3.5-8.8 L-1.5-8.2 M6.3 6.5 L8 5.4 M-8-2.8 L-7.1-4.8" />
+                    </g>
+                    <circle className="ball-rim" r="11" />
+                    <ellipse className="ball-highlight" cx="-4" cy="-5" rx="2.4" ry="1.4" />
+                  </g>
+                </g>
               </svg>
               <div className="pitch-caption"><span><i /> TXLINE EVENT</span><strong>{currentEvent.title}</strong><small>{Math.abs(currentEvent.second - second) < 12 ? currentEvent.detail : "Interpolating between recorded events"}</small></div>
-              {selected && <div className="player-card"><div className="player-avatar">{selected.player.number}</div><div><span>{selected.player.team === "home" ? "FRANCE" : "MOROCCO"}</span><strong>{selected.player.name}</strong></div><div><span>EST. SPEED</span><strong>{(22 + Math.abs(Math.sin(second / 30 + selected.player.id)) * 9).toFixed(1)} km/h</strong></div></div>}
+              {camera === "Orbit" && <div className="replay-360-badge"><Rotate3D size={14} /><div><strong>360° REPLAY</strong><span>{selectedHighlight.scorer} · {selectedHighlight.score}</span></div></div>}
+              {inspected && <aside className="player-stats-panel" aria-live="polite">
+                <div className="player-stats-head"><div className="player-avatar">{inspected.player.number}</div><div><span>{inspected.player.team === "home" ? "FRANCE" : "MOROCCO"}</span><strong>{inspected.player.name}</strong><small>{inspected.player.txlinePlayerId ? `TxLINE ID ${inspected.player.txlinePlayerId}` : "TxLINE identity unresolved"}</small></div></div>
+                <div className="stats-source"><Database size={13} /><span>TXLINE PLAYER STATS</span><b>{inspected.player.txlinePlayerId ? "RESOLVED" : "LIMITED"}</b></div>
+                <div className="player-stat-grid">
+                  <div><span>GOALS</span><strong>{inspected.player.feedStats.goals}</strong></div>
+                  <div><span>YELLOW</span><strong>{inspected.player.feedStats.yellowCards}</strong></div>
+                  <div><span>RED</span><strong>{inspected.player.feedStats.redCards}</strong></div>
+                  <div><span>PENALTIES</span><strong>{inspected.player.feedStats.penaltyGoals}/{inspected.player.feedStats.penaltyAttempts}</strong></div>
+                </div>
+                <div className="lineup-facts"><span><small>SQUAD</small><strong>#{inspected.player.number}</strong></span><span><small>LINEUP</small><strong>{inspected.player.starter ? "Starter" : "Unresolved"}</strong></span></div>
+                <div className="estimated-metric"><span><small>FIELDTRACER ESTIMATE</small><strong>{(22 + Math.abs(Math.sin(second / 30 + inspected.player.id)) * 9).toFixed(1)} km/h</strong></span><b>RECONSTRUCTED</b></div>
+              </aside>}
             </div>
 
             <div className="playback">
@@ -331,7 +421,7 @@ export function FieldTracerApp() {
 
           <div className="layers-card panel"><div className="section-title"><div><span className="eyebrow">VIEW CONTROL</span><h3>Tactical layers</h3></div><Layers3 size={19}/></div><div className="layer-grid"><LayerButton active={layers.paths} label="Running paths" onClick={() => toggleLayer("paths")}/><LayerButton active={layers.pressure} label="Pressure radius" onClick={() => toggleLayer("pressure")}/><LayerButton active={layers.network} label="Passing network" onClick={() => toggleLayer("network")}/><LayerButton active={layers.offside} label="Offside line" onClick={() => toggleLayer("offside")}/></div><div className="source-note"><Box size={15}/><span>Positions are reconstructed for this MVP. TxLINE events remain source-authentic.</span></div></div>
         </aside>
-      </section>
+      </section>}
     </main>
   );
 }

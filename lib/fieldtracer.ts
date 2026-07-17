@@ -17,6 +17,21 @@ export type MatchEvent = {
   intensity: number;
 };
 
+export type MatchHighlight = {
+  id: string;
+  eventId: string;
+  second: number;
+  startSecond: number;
+  endSecond: number;
+  team: "home" | "away";
+  title: string;
+  scorer: string;
+  playerId: number;
+  txlinePlayerId: number;
+  score: string;
+  goalType: string;
+};
+
 export type MatchSummary = {
   fixtureId: number;
   home: string;
@@ -29,15 +44,51 @@ export type MatchSummary = {
   status: string;
 };
 
+export type ExplorerGoal = {
+  minute: number;
+  player: string;
+  team: string;
+  resolved: boolean;
+};
+
+export type ExplorerMatch = MatchSummary & {
+  date: string;
+  kickoff: string;
+  duration: "90 min" | "Extra time";
+  capture: "Historical replay" | "Live capture";
+  goals: ExplorerGoal[];
+};
+
+export type PlayerLeader = {
+  rank: number;
+  name: string;
+  team: string;
+  goals: number;
+  appearances: number;
+  impact: number;
+  fixtureId: number;
+};
+
 export type Player = {
   id: number;
   name: string;
   number: number;
+  txlinePlayerId?: number;
+  starter?: boolean;
+  feedStats: PlayerFeedStats;
   team: "home" | "away";
   countryCode: string;
   kit: JerseyKit;
   x: number;
   y: number;
+};
+
+export type PlayerFeedStats = {
+  goals: number;
+  yellowCards: number;
+  redCards: number;
+  penaltyGoals: number;
+  penaltyAttempts: number;
 };
 
 export type JerseyPattern = "solid" | "center-stripe" | "tricolor" | "vertical-stripes";
@@ -98,6 +149,62 @@ export const matches: MatchSummary[] = [
   { fixtureId: 18241006, home: "Team 1", away: "Team 2", homeCode: "T01", awayCode: "T02", homeScore: 1, awayScore: 2, stage: "Knockout", status: "Full time" },
 ];
 
+export const explorerMatches: ExplorerMatch[] = [
+  {
+    ...matches[0], date: "09 Jul 2026", kickoff: "20:00 UTC", duration: "90 min", capture: "Historical replay",
+    goals: [
+      { minute: 59, player: "Kylian Mbappe", team: "France", resolved: true },
+      { minute: 65, player: "Ousmane Dembele", team: "France", resolved: true },
+    ],
+  },
+  {
+    ...matches[1], home: "Norway", away: "England", homeCode: "NOR", awayCode: "ENG", date: "11 Jul 2026", kickoff: "21:00 UTC", duration: "Extra time", capture: "Historical replay",
+    goals: [
+      { minute: 35, player: "Andreas Schjelderup", team: "Norway", resolved: true },
+      { minute: 46, player: "Jude Bellingham", team: "England", resolved: true },
+      { minute: 92, player: "Jude Bellingham", team: "England", resolved: true },
+    ],
+  },
+  {
+    ...matches[2], home: "Spain", away: "Belgium", homeCode: "ESP", awayCode: "BEL", date: "10 Jul 2026", kickoff: "19:00 UTC", duration: "90 min", capture: "Historical replay",
+    goals: [
+      { minute: 29, player: "Fabian Ruiz", team: "Spain", resolved: true },
+      { minute: 40, player: "Charles De Ketelaere", team: "Belgium", resolved: true },
+      { minute: 87, player: "Mikel Merino", team: "Spain", resolved: true },
+    ],
+  },
+  {
+    ...matches[3], home: "Argentina", away: "Switzerland", homeCode: "ARG", awayCode: "SUI", date: "12 Jul 2026", kickoff: "01:00 UTC", duration: "Extra time", capture: "Historical replay",
+    goals: [
+      { minute: 9, player: "Alexis Mac Allister", team: "Argentina", resolved: true },
+      { minute: 66, player: "Dan Ndoye", team: "Switzerland", resolved: true },
+      { minute: 111, player: "Julian Alvarez", team: "Argentina", resolved: true },
+      { minute: 120, player: "Lautaro Martinez", team: "Argentina", resolved: true },
+    ],
+  },
+  {
+    ...matches[4], date: "14 Jul 2026", kickoff: "19:00 UTC", duration: "90 min", capture: "Live capture",
+    goals: [{ minute: 57, player: "Player 907005", team: "Team 2", resolved: false }],
+  },
+  {
+    ...matches[5], date: "15 Jul 2026", kickoff: "19:00 UTC", duration: "90 min", capture: "Live capture",
+    goals: [
+      { minute: 54, player: "Player 911404", team: "Team 1", resolved: false },
+      { minute: 84, player: "Player 10035609", team: "Team 2", resolved: false },
+      { minute: 91, player: "Player 948167", team: "Team 2", resolved: false },
+    ],
+  },
+];
+
+// FieldTracer impact is a transparent contribution score, not an official TxLINE rating.
+export const playerLeaders: PlayerLeader[] = [
+  { rank: 1, name: "Jude Bellingham", team: "England", goals: 2, appearances: 1, impact: 9.4, fixtureId: 18213979 },
+  { rank: 2, name: "Kylian Mbappe", team: "France", goals: 1, appearances: 1, impact: 8.8, fixtureId: 18209181 },
+  { rank: 3, name: "Julian Alvarez", team: "Argentina", goals: 1, appearances: 1, impact: 8.6, fixtureId: 18222446 },
+  { rank: 4, name: "Ousmane Dembele", team: "France", goals: 1, appearances: 1, impact: 8.4, fixtureId: 18209181 },
+  { rank: 5, name: "Fabian Ruiz", team: "Spain", goals: 1, appearances: 1, impact: 8.2, fixtureId: 18218149 },
+];
+
 export const events: MatchEvent[] = [
   { id: "corner-20", second: 1188, type: "corner", team: "home", title: "France corner", detail: "Pressure building down the left channel", intensity: 58 },
   { id: "shot-20", second: 1219, type: "shot", team: "home", title: "Shot attempt", detail: "First contact after the corner", intensity: 71 },
@@ -113,14 +220,64 @@ export const events: MatchEvent[] = [
   { id: "shot-93", second: 5612, type: "shot", team: "home", title: "Final France attempt", detail: "Closing action before full time", intensity: 66 },
 ];
 
+// Goal metadata resolved from the TxLINE goal and lineup events in fixture 18209181.
+// Spatial movement remains reconstructed because this feed does not contain tracking coordinates.
+export const highlights: MatchHighlight[] = [
+  {
+    id: "highlight-goal-59",
+    eventId: "goal-59",
+    second: 3560,
+    startSecond: 3538,
+    endSecond: 3570,
+    team: "home",
+    title: "France break the deadlock",
+    scorer: "Kylian Mbappe",
+    playerId: 10,
+    txlinePlayerId: 453928,
+    score: "1-0",
+    goalType: "Shot",
+  },
+  {
+    id: "highlight-goal-65",
+    eventId: "goal-65",
+    second: 3922,
+    startSecond: 3900,
+    endSecond: 3932,
+    team: "home",
+    title: "France double the lead",
+    scorer: "Ousmane Dembele",
+    playerId: 9,
+    txlinePlayerId: 413676,
+    score: "2-0",
+    goalType: "Shot",
+  },
+];
+
 const homeNames = ["Maignan", "Koundé", "Saliba", "Upamecano", "Hernández", "Tchouaméni", "Rabiot", "Griezmann", "Dembélé", "Mbappé", "Thuram"];
 const awayNames = ["Bounou", "Hakimi", "Aguerd", "Saïss", "Mazraoui", "Amrabat", "Ounahi", "Ziyech", "Boufal", "En-Nesyri", "Ezzalzouli"];
 const homeShape = [[7,50],[22,18],[20,39],[20,62],[22,82],[39,37],[39,64],[56,50],[66,22],[72,48],[65,78]];
 const awayShape = [[93,50],[79,18],[81,39],[81,62],[79,82],[63,37],[63,64],[48,50],[36,22],[29,48],[36,78]];
+const homeTxlineIds: Array<number | undefined> = [450704, 602326, 1023287, 493403, undefined, undefined, 182068, undefined, 413676, 453928, undefined];
+const awayTxlineIds: Array<number | undefined> = [313097, 664273, undefined, undefined, 453867, undefined, 10092778, undefined, undefined, undefined, undefined];
+const capturedPlayerStats: Record<number, Partial<PlayerFeedStats>> = {
+  413676: { goals: 1 },
+  453928: { goals: 1 },
+};
+
+function feedStatsFor(txlinePlayerId?: number): PlayerFeedStats {
+  return {
+    goals: 0,
+    yellowCards: 0,
+    redCards: 0,
+    penaltyGoals: 0,
+    penaltyAttempts: 0,
+    ...(txlinePlayerId ? capturedPlayerStats[txlinePlayerId] : undefined),
+  };
+}
 
 export const players: Player[] = [
-  ...homeShape.map(([x, y], index) => ({ id: index + 1, name: homeNames[index], number: [16,5,17,4,22,8,14,7,11,10,15][index], team: "home" as const, countryCode: "FRA", kit: resolveJerseyKit("FRA"), x, y })),
-  ...awayShape.map(([x, y], index) => ({ id: index + 12, name: awayNames[index], number: [1,2,5,6,3,4,8,7,17,19,16][index], team: "away" as const, countryCode: "MAR", kit: resolveJerseyKit("MAR"), x, y })),
+  ...homeShape.map(([x, y], index) => ({ id: index + 1, name: homeNames[index], number: [16,5,17,4,22,8,14,7,11,10,15][index], txlinePlayerId: homeTxlineIds[index], starter: homeTxlineIds[index] ? true : undefined, feedStats: feedStatsFor(homeTxlineIds[index]), team: "home" as const, countryCode: "FRA", kit: resolveJerseyKit("FRA"), x, y })),
+  ...awayShape.map(([x, y], index) => ({ id: index + 12, name: awayNames[index], number: [1,2,5,6,3,4,8,7,17,19,16][index], txlinePlayerId: awayTxlineIds[index], starter: awayTxlineIds[index] ? true : undefined, feedStats: feedStatsFor(awayTxlineIds[index]), team: "away" as const, countryCode: "MAR", kit: resolveJerseyKit("MAR"), x, y })),
 ];
 
 export function formatClock(seconds: number) {
