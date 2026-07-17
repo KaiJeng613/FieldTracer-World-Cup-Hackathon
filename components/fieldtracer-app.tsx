@@ -372,23 +372,30 @@ export function FieldTracerApp() {
               <div><span className="eyebrow">MATCH HIGHLIGHTS</span><h2 id="match-highlights-title">Choose an exciting moment</h2></div>
               <div className="highlight-source"><Database size={13} /> Goal time + scorer from TxLINE</div>
             </div>
-            <div className="highlight-carousel">
-              {highlights.map((highlight, index) => (
-                <article className={`highlight-card ${selectedHighlightId === highlight.id ? "selected" : ""}`} key={highlight.id}>
-                  <button className="highlight-select" onClick={() => { setSelectedHighlightId(highlight.id); jumpTo(highlight.second); setSelectedPlayer(highlight.playerId); }}>
-                    <span className="highlight-minute">{Math.floor(highlight.second / 60)}&prime;</span>
-                    <span className="highlight-icon"><Goal size={17} /></span>
-                    <span className="highlight-copy"><small>GOAL {index + 1} &middot; {highlight.score}</small><strong>{highlight.scorer}</strong><span>{highlight.title}</span></span>
-                    <span className="feed-badge">TX</span>
-                  </button>
-                  <button className="watch-360" onClick={() => playHighlight(highlight.id)}><Rotate3D size={15} /> Watch 360&deg;</button>
-                </article>
-              ))}
-              <div className="orbit-control">
-                <div><Rotate3D size={16} /><span><strong>Camera orbit</strong><small>Drag to inspect the reconstructed play</small></span><b>{Math.round(liveOrbitAngle)}&deg;</b></div>
-                <input aria-label="360 degree replay camera angle" type="range" min="0" max="359" value={orbitAngle} onChange={(event) => { setOrbitAngle(Number(event.target.value)); setCamera("Orbit"); }} />
+            {highlights.length > 0 ? (
+              <div className="highlight-carousel">
+                {highlights.map((highlight, index) => (
+                  <article className={`highlight-card ${selectedHighlightId === highlight.id ? "selected" : ""}`} key={highlight.id}>
+                    <button className="highlight-select" onClick={() => { setSelectedHighlightId(highlight.id); jumpTo(highlight.second); setSelectedPlayer(highlight.playerId); }}>
+                      <span className="highlight-minute">{Math.floor(highlight.second / 60)}&prime;</span>
+                      <span className="highlight-icon"><Goal size={17} /></span>
+                      <span className="highlight-copy"><small>GOAL {index + 1} &middot; {highlight.score}</small><strong>{highlight.scorer}</strong><span>{highlight.title}</span></span>
+                      <span className="feed-badge">TX</span>
+                    </button>
+                    <button className="watch-360" onClick={() => playHighlight(highlight.id)}><Rotate3D size={15} /> Watch 360&deg;</button>
+                  </article>
+                ))}
+                <div className="orbit-control">
+                  <div><Rotate3D size={16} /><span><strong>Camera orbit</strong><small>Drag to inspect the reconstructed play</small></span><b>{Math.round(liveOrbitAngle)}&deg;</b></div>
+                  <input aria-label="360 degree replay camera angle" type="range" min="0" max="359" value={orbitAngle} onChange={(event) => { setOrbitAngle(Number(event.target.value)); setCamera("Orbit"); }} />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--muted)" }}>
+                <p style={{ margin: 0, fontSize: "11px" }}>No highlights available for this match</p>
+                <p style={{ margin: "8px 0 0", fontSize: "9px" }}>Goal events will appear here when available from TxLINE</p>
+              </div>
+            )}
           </section>
 
           <div className="viewer panel">
