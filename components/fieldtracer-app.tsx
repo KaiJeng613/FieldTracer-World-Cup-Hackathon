@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
@@ -22,6 +22,8 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Sun,
+  Moon,
   TimerReset,
   Users,
   Wallet,
@@ -31,9 +33,11 @@ import { ballAt, events, formatClock, matches, nearestEvent, playerAt, players, 
 
 type Camera = "Tactical" | "Broadcast" | "Orbit";
 type LayerKey = "paths" | "network" | "pressure" | "offside";
+type Theme = "dark" | "light";
 type ApiStatus = { configured: boolean; mode: "live" | "demo"; network: string; message: string };
 
 const MAX_SECONDS = 5765;
+const subscribeToHydration = () => () => undefined;
 
 const eventIcon: Record<MatchEventType, string> = {
   goal: "G",
@@ -70,15 +74,22 @@ function PlayerFigure({ player, selected }: { player: Player; selected: boolean 
   const armLift = (player.id % 2 ? -1 : 1) * (2 + player.id % 3);
 
   return (
-    <g className="humanoid">
+    <g className="humanoid" style={{ animationDelay: `${-(player.id % 8) * 0.17}s` }}>
       <ellipse className="player-shadow" cx="0" cy="12" rx="10" ry="4" />
       {selected && <circle r="20" className="selection-pulse" />}
       <line className="limb leg" x1="-3" y1="5" x2={-stride} y2="15" />
       <line className="limb leg" x1="3" y1="5" x2={stride} y2="15" />
       <line className="limb arm" x1="-6" y1="-2" x2="-12" y2={armLift} />
       <line className="limb arm" x1="6" y1="-2" x2="12" y2={-armLift} />
-      <path className="jersey" d="M-7-7 L-3-10 L3-10 L7-7 L6 7 Q0 10-6 7 Z" />
+      <path className="jersey" fill={`url(#${player.team}Jersey)`} d="M-7-7 L-3-10 L3-10 L7-7 L6 7 Q0 10-6 7 Z" />
+      {player.team === "home" ? (
+        <g className="kit-detail france-kit"><path d="M-1.8-8 H-.25 V7 H-1.8Z"/><path d="M-.25-8 H1.8 V7 H-.25Z"/></g>
+      ) : (
+        <g className="kit-detail morocco-kit"><path d="M-1-8 H1 V7 H-1Z"/><circle cx="0" cy="-3" r="2.2"/></g>
+      )}
+      <path className="jersey-shine" d="M-5-6 Q-2-9 0-8 L-1 6 Q-4 6-5 4Z" />
       <circle className="player-head" cx="0" cy="-13" r="5" style={{ fill: skin }} />
+      <ellipse className="head-shine" cx="-1.5" cy="-14.5" rx="1.6" ry="1.2" />
       <path className="player-hair" d="M-4-15 Q0-20 4-15 Q1-17-4-15" />
       <text className="jersey-number" y="3">{player.number}</text>
     </g>
@@ -87,6 +98,11 @@ function PlayerFigure({ player, selected }: { player: Player; selected: boolean 
 
 export function FieldTracerApp() {
   const wallet = useWallet();
+  const mounted = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "dark";
+    return window.localStorage.getItem("fieldtracer-theme") === "light" ? "light" : "dark";
+  });
   const [second, setSecond] = useState(3922);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -153,13 +169,31 @@ export function FieldTracerApp() {
     if (target) jumpTo(target.second);
   };
 
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    window.localStorage.setItem("fieldtracer-theme", next);
+    setTheme(next);
+  };
+
+  if (!mounted) {
+    return (
+      <main className="app-boot" aria-label="Loading FieldTracer">
+        <div className="boot-mark"><Crosshair size={26} /></div>
+        <strong>FIELDTRACER</strong>
+        <span>Preparing replay studio</span>
+      </main>
+    );
+  }
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell theme-${theme}`}>
       <header className="topbar">
         <div className="brand"><div className="brand-mark"><Crosshair size={22} /></div><div><strong>FIELDTRACER</strong><span>Match intelligence</span></div></div>
         <nav><button className="active">Replay studio</button><button>Explorer</button><button>Live desk</button></nav>
         <div className="top-actions">
-          <span className={`source-pill ${status?.configured ? "live" : ""}`}><i />{status?.configured ? "TxLINE live" : "Demo feed"}</span>
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
           <WalletMultiButton />
         </div>
       </header>
@@ -204,6 +238,8 @@ export function FieldTracerApp() {
                 <defs>
                   <radialGradient id="pressureHome"><stop offset="0" stopColor="#6dff8d" stopOpacity=".28"/><stop offset="1" stopColor="#6dff8d" stopOpacity="0"/></radialGradient>
                   <radialGradient id="pressureAway"><stop offset="0" stopColor="#ff806c" stopOpacity=".25"/><stop offset="1" stopColor="#ff806c" stopOpacity="0"/></radialGradient>
+                  <linearGradient id="homeJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3d76ff"/><stop offset=".55" stopColor="#153fa9"/><stop offset="1" stopColor="#071c61"/></linearGradient>
+                  <linearGradient id="awayJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ff6257"/><stop offset=".58" stopColor="#c51f2b"/><stop offset="1" stopColor="#6d0f1b"/></linearGradient>
                   <filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                 </defs>
                 <rect className="pitch-ground" x="8" y="8" width="1034" height="664" rx="8" />
