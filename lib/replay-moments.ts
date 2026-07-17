@@ -111,15 +111,25 @@ export async function getReplayMoment(
 
     // Handle both legacy and versioned transactions
     const message = tx.transaction.message;
-    const instructions = "compiledInstructions" in message 
-      ? message.compiledInstructions 
-      : message.instructions;
+    
+    // Type guard to check message type
+    let instructions: any[];
+    let accountKeys: any[];
+    
+    if ('compiledInstructions' in message) {
+      // Versioned transaction (v0)
+      instructions = message.compiledInstructions;
+      accountKeys = message.staticAccountKeys;
+    } else if ('instructions' in message) {
+      // Legacy transaction
+      instructions = message.instructions;
+      accountKeys = message.accountKeys;
+    } else {
+      return null;
+    }
 
     // Find memo instruction in transaction
     const memoInstruction = instructions.find((ix: any) => {
-      const accountKeys = "staticAccountKeys" in message 
-        ? message.staticAccountKeys 
-        : message.accountKeys;
       const programId = accountKeys[ix.programIdIndex];
       return programId.equals(MEMO_PROGRAM_ID);
     });
