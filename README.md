@@ -39,6 +39,7 @@ Never use `NEXT_PUBLIC_` for these credentials. The browser calls FieldTracer's 
 ## Data routes
 
 - `GET /api/txline/status` reports whether the server is in live or demo mode.
+- `GET /api/txline/fixtures` fetches the list of available fixtures from TxLINE (or returns demo data if not configured).
 - `GET /api/txline/fixture/:fixtureId` proxies TxLINE historical score data when credentials are configured.
 
 ## Verification

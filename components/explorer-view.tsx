@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight, Database, Goal, Medal, Search, ShieldCheck, Sparkles, Trophy } from "lucide-react";
-import { explorerMatches, playerLeaders } from "@/lib/fieldtracer";
+import { explorerMatches, playerLeaders, type ExplorerMatch } from "@/lib/fieldtracer";
 
 type MatchFilter = "All" | "90 min" | "Extra time";
 
@@ -14,18 +14,48 @@ export function ExplorerView({ onOpenReplay }: { onOpenReplay: () => void }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MatchFilter>("All");
   const [selectedFixture, setSelectedFixture] = useState(explorerMatches[0].fixtureId);
+  const [liveMatches, setLiveMatches] = useState<ExplorerMatch[]>(explorerMatches);
+
+  useEffect(() => {
+    // Fetch live fixtures and merge with existing explorer data
+    fetch("/api/txline/fixtures")
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.fixtures && data.fixtures.length > 0) {
+          // Enhance fixtures with explorer data format
+          const enhanced = data.fixtures.map((fixture: any, index: number) => {
+            // Check if we have detailed data for this fixture
+            const existing = explorerMatches.find((m) => m.fixtureId === fixture.fixtureId);
+            if (existing) {
+              return existing;
+            }
+            // Create basic explorer format for new fixtures
+            return {
+              ...fixture,
+              date: "Recent",
+              kickoff: "TBD",
+              duration: "90 min" as const,
+              capture: "Live capture" as const,
+              goals: [],
+            };
+          });
+          setLiveMatches(enhanced);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   const visibleMatches = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return explorerMatches.filter((match) => {
+    return liveMatches.filter((match) => {
       const matchesFilter = filter === "All" || match.duration === filter;
       const matchesQuery = !normalized || `${match.home} ${match.away} ${match.fixtureId}`.toLowerCase().includes(normalized);
       return matchesFilter && matchesQuery;
     });
-  }, [filter, query]);
+  }, [filter, liveMatches, query]);
 
-  const selected = explorerMatches.find((match) => match.fixtureId === selectedFixture) || explorerMatches[0];
-  const capturedGoals = explorerMatches.reduce((total, match) => total + match.goals.length, 0);
+  const selected = liveMatches.find((match) => match.fixtureId === selectedFixture) || liveMatches[0];
+  const capturedGoals = liveMatches.reduce((total, match) => total + match.goals.length, 0);
 
   return (
     <section className="explorer-shell">
@@ -36,7 +66,7 @@ export function ExplorerView({ onOpenReplay }: { onOpenReplay: () => void }) {
           <p>Browse the captured World Cup fixtures, inspect final scores, and trace player contributions back to TxLINE score and lineup events.</p>
         </div>
         <div className="explorer-summary">
-          <div><Database size={17} /><span><strong>{explorerMatches.length}</strong>fixtures</span></div>
+          <div><Database size={17} /><span><strong>{liveMatches.length}</strong>fixtures</span></div>
           <div><Goal size={17} /><span><strong>{capturedGoals}</strong>goal events</span></div>
           <div><ShieldCheck size={17} /><span><strong>4</strong>full histories</span></div>
         </div>

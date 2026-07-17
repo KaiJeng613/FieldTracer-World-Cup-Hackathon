@@ -140,12 +140,36 @@ export function FieldTracerApp() {
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [proofState, setProofState] = useState<"idle" | "signing" | "signed" | "unsupported">("idle");
   const [query, setQuery] = useState("");
+  const [recentMatches, setRecentMatches] = useState<MatchSummary[]>(matches);
+  const [selectedFixtureId, setSelectedFixtureId] = useState(18209181);
   const frameRef = useRef<number | null>(null);
   const previousRef = useRef<number>(0);
 
   useEffect(() => {
     fetch("/api/txline/status").then((response) => response.json()).then(setStatus).catch(() => undefined);
+    fetch("/api/txline/fixtures").then((response) => response.json()).then((data) => {
+      if (data.fixtures && data.fixtures.length > 0) {
+        setRecentMatches(data.fixtures);
+      }
+    }).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    // Load fixture details when a different fixture is selected
+    if (selectedFixtureId !== 18209181) {
+      fetch(`/api/txline/fixture/${selectedFixtureId}`)
+        .then((response) => response.text())
+        .then((data) => {
+          console.log("Fixture data loaded:", data);
+          // TODO: Parse and apply the fixture data to update the replay
+          // For now, just log it. Full integration would require parsing
+          // the TxLINE event stream format and updating the replay state.
+        })
+        .catch((error) => {
+          console.error("Failed to load fixture:", error);
+        });
+    }
+  }, [selectedFixtureId]);
 
   useEffect(() => {
     if (!playing) return;
@@ -252,8 +276,12 @@ export function FieldTracerApp() {
           <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search moments…" /></label>
           <div className="date-separator"><span>RECENT MATCHES</span><i /></div>
           <div className="match-list">
-            {matches.map((match, index) => (
-              <button className={`match-card ${index === 0 ? "selected" : ""}`} key={match.fixtureId}>
+            {recentMatches.map((match) => (
+              <button 
+                className={`match-card ${match.fixtureId === selectedFixtureId ? "selected" : ""}`} 
+                key={match.fixtureId}
+                onClick={() => setSelectedFixtureId(match.fixtureId)}
+              >
                 <div className="match-meta"><span>{match.stage}</span><small>#{match.fixtureId}</small></div>
                 <div className="team-line"><Flag code={match.homeCode} tone="blue" /><strong>{match.home}</strong><b>{match.homeScore}</b></div>
                 <div className="team-line"><Flag code={match.awayCode} tone="red" /><strong>{match.away}</strong><b>{match.awayScore}</b></div>
@@ -261,7 +289,7 @@ export function FieldTracerApp() {
               </button>
             ))}
           </div>
-          <div className="rail-footer"><Database size={16} /><div><strong>6 raw fixtures indexed</strong><span>Scores · odds · historical</span></div></div>
+          <div className="rail-footer"><Database size={16} /><div><strong>{recentMatches.length} fixtures indexed</strong><span>Scores · odds · historical</span></div></div>
         </aside>
 
         <section className="studio">
