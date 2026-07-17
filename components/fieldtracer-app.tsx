@@ -34,7 +34,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { ballAt, events, formatClock, highlights, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEventType, type Player } from "@/lib/fieldtracer";
+import { ballAt, events, formatClock, highlights, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEventType, type MatchSummary, type Player } from "@/lib/fieldtracer";
 
 type Camera = "Tactical" | "Broadcast" | "Orbit";
 type LayerKey = "paths" | "network" | "pressure" | "offside";
