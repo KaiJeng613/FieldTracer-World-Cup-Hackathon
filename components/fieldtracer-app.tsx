@@ -156,11 +156,22 @@ export function FieldTracerApp() {
   const previousRef = useRef<number>(0);
 
   // Use loaded fixture data if available AND if it's not the default France match
-  // For France vs Morocco (18209181), always use the hardcoded data from fieldtracer.ts
-  const activeMatch = currentFixtureData?.match || matches[0];
+  // For France vs Morocco (18209181), NEVER use currentFixtureData, always use hardcoded
+  const activeMatch = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.match : matches[0];
   const activeEvents = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.events : events;
   const activeHighlights = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.highlights : highlights;
   const activePlayers = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.players : players;
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Current state:", {
+      selectedFixtureId,
+      currentFixtureData: currentFixtureData?.match,
+      activePlayersCount: activePlayers.length,
+      activeHighlightsCount: activeHighlights.length,
+      activeEventsCount: activeEvents.length,
+    });
+  }, [selectedFixtureId, currentFixtureData, activePlayers.length, activeHighlights.length, activeEvents.length]);
 
   useEffect(() => {
     fetch("/api/txline/status").then((response) => response.json()).then(setStatus).catch(() => undefined);
@@ -186,13 +197,17 @@ export function FieldTracerApp() {
   useEffect(() => {
     // Load fixture details when a different fixture is selected
     // Skip loading for the default France vs Morocco match (18209181) - use hardcoded data
+    console.log("Fixture selection changed to:", selectedFixtureId);
+    
     if (selectedFixtureId === 18209181) {
+      console.log("Using hardcoded France vs Morocco data");
       setCurrentFixtureData(null); // Use defaults
       setSecond(3922); // Reset to default time
       setPlaying(false);
       return;
     }
 
+    console.log("Fetching fixture data for:", selectedFixtureId);
     setLoadingFixture(true);
     
     fetch(`/api/txline/fixture/${selectedFixtureId}`)
