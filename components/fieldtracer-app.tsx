@@ -144,7 +144,7 @@ export function FieldTracerApp() {
   const [selectedFixtureId, setSelectedFixtureId] = useState(18209181);
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [currentFixtureData, setCurrentFixtureData] = useState<ParsedFixtureData | null>(null);
-  const [selectedHighlightId, setSelectedHighlightId] = useState(defaultHighlights[1].id);
+  const [selectedHighlightId, setSelectedHighlightId] = useState("");
   const frameRef = useRef<number | null>(null);
   const previousRef = useRef<number>(0);
 
@@ -153,6 +153,13 @@ export function FieldTracerApp() {
   const events = currentFixtureData?.events || defaultEvents;
   const highlights = currentFixtureData?.highlights || defaultHighlights;
   const players = currentFixtureData?.players || defaultPlayers;
+
+  // Initialize selectedHighlightId when highlights change
+  useEffect(() => {
+    if (highlights.length > 0 && !selectedHighlightId) {
+      setSelectedHighlightId(highlights[0].id);
+    }
+  }, [highlights, selectedHighlightId]);
 
   useEffect(() => {
     fetch("/api/txline/status").then((response) => response.json()).then(setStatus).catch(() => undefined);
