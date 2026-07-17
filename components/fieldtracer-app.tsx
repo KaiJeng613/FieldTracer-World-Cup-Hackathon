@@ -34,7 +34,8 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { ballAt, events, formatClock, highlights, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEventType, type MatchSummary, type Player } from "@/lib/fieldtracer";
+import { ballAt, events as defaultEvents, formatClock, highlights as defaultHighlights, matches, nearestEvent, playerAt, players as defaultPlayers, type JerseyKit, type MatchEvent, type MatchEventType, type MatchHighlight, type MatchSummary, type Player } from "@/lib/fieldtracer";
+import { parseTxLineFixture, type ParsedFixtureData } from "@/lib/txline-parser";
 
 type Camera = "Tactical" | "Broadcast" | "Orbit";
 type LayerKey = "paths" | "network" | "pressure" | "offside";
@@ -135,15 +136,23 @@ export function FieldTracerApp() {
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(10);
   const [hoveredPlayer, setHoveredPlayer] = useState<number | null>(null);
   const [pitchZoom, setPitchZoom] = useState(1);
-  const [selectedHighlightId, setSelectedHighlightId] = useState(highlights[1].id);
   const [orbitAngle, setOrbitAngle] = useState(18);
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [proofState, setProofState] = useState<"idle" | "signing" | "signed" | "unsupported">("idle");
   const [query, setQuery] = useState("");
   const [recentMatches, setRecentMatches] = useState<MatchSummary[]>(matches);
   const [selectedFixtureId, setSelectedFixtureId] = useState(18209181);
+  const [loadingFixture, setLoadingFixture] = useState(false);
+  const [currentFixtureData, setCurrentFixtureData] = useState<ParsedFixtureData | null>(null);
+  const [selectedHighlightId, setSelectedHighlightId] = useState(defaultHighlights[1].id);
   const frameRef = useRef<number | null>(null);
   const previousRef = useRef<number>(0);
+
+  // Use current fixture data or fall back to defaults
+  const activeMatch = currentFixtureData?.match || matches[0];
+  const events = currentFixtureData?.events || defaultEvents;
+  const highlights = currentFixtureData?.highlights || defaultHighlights;
+  const players = currentFixtureData?.players || defaultPlayers;
 
   useEffect(() => {
     fetch("/api/txline/status").then((response) => response.json()).then(setStatus).catch(() => undefined);
@@ -156,19 +165,34 @@ export function FieldTracerApp() {
 
   useEffect(() => {
     // Load fixture details when a different fixture is selected
-    if (selectedFixtureId !== 18209181) {
-      fetch(`/api/txline/fixture/${selectedFixtureId}`)
-        .then((response) => response.text())
-        .then((data) => {
-          console.log("Fixture data loaded:", data);
-          // TODO: Parse and apply the fixture data to update the replay
-          // For now, just log it. Full integration would require parsing
-          // the TxLINE event stream format and updating the replay state.
-        })
-        .catch((error) => {
-          console.error("Failed to load fixture:", error);
-        });
-    }
+    setLoadingFixture(true);
+    
+    fetch(`/api/txline/fixture/${selectedFixtureId}`)
+      .then((response) => response.text())
+      .then((data) => {
+        console.log("Fixture data loaded for", selectedFixtureId);
+        const parsed = parseTxLineFixture(data, selectedFixtureId);
+        
+        if (parsed) {
+          console.log("Parsed fixture data:", parsed);
+          setCurrentFixtureData(parsed);
+          // Reset playback to start
+          setSecond(0);
+          setPlaying(false);
+          if (parsed.highlights.length > 0) {
+            setSelectedHighlightId(parsed.highlights[0].id);
+            setSelectedPlayer(parsed.highlights[0].playerId);
+          }
+        } else {
+          console.warn("Could not parse fixture data for", selectedFixtureId);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load fixture:", error);
+      })
+      .finally(() => {
+        setLoadingFixture(false);
+      });
   }, [selectedFixtureId]);
 
   useEffect(() => {
@@ -293,11 +317,33 @@ export function FieldTracerApp() {
         </aside>
 
         <section className="studio">
+          {loadingFixture && (
+            <div className="loading-overlay" style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(2, 7, 19, 0.9)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              gap: '12px',
+              flexDirection: 'column'
+            }}>
+              <div style={{ animation: 'spin 1s linear infinite' }}>
+                <Database size={32} />
+              </div>
+              <strong>Loading fixture {selectedFixtureId}...</strong>
+              <span style={{ opacity: 0.7 }}>Fetching TxLINE data</span>
+            </div>
+          )}
           <div className="scoreboard panel">
-            <div className="competition"><span className="eyebrow">WORLD CUP · ROUND OF 16</span><div><Clock3 size={14} /> TxLINE fixture 18209181</div></div>
-            <div className="score-team home"><div><span>FRA</span><strong>France</strong></div><Flag code="FR" tone="blue" /></div>
-            <div className="score"><strong>2</strong><span>—</span><strong>0</strong><small>FULL TIME</small></div>
-            <div className="score-team away"><Flag code="MA" tone="red" /><div><span>MAR</span><strong>Morocco</strong></div></div>
+            <div className="competition"><span className="eyebrow">WORLD CUP · {activeMatch.stage.toUpperCase()}</span><div><Clock3 size={14} /> TxLINE fixture {activeMatch.fixtureId}</div></div>
+            <div className="score-team home"><div><span>{activeMatch.homeCode}</span><strong>{activeMatch.home}</strong></div><Flag code={activeMatch.homeCode} tone="blue" /></div>
+            <div className="score"><strong>{activeMatch.homeScore}</strong><span>—</span><strong>{activeMatch.awayScore}</strong><small>{activeMatch.status.toUpperCase()}</small></div>
+            <div className="score-team away"><Flag code={activeMatch.awayCode} tone="red" /><div><span>{activeMatch.awayCode}</span><strong>{activeMatch.away}</strong></div></div>
             <button aria-label="Show match details" className="more-button"><ChevronDown size={18} /></button>
           </div>
 

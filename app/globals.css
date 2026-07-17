@@ -476,3 +476,9 @@ h2, h3 { margin: 0; }
   .history-date { padding-right: 7px; }
   .detail-score { grid-template-columns: 1fr 70px 1fr; }
 }
+
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
