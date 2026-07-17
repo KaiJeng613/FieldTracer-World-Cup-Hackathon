@@ -225,8 +225,21 @@ export function FieldTracerApp() {
   const inspected = positions.find(({ player }) => player.id === inspectedPlayerId);
   const homeKit = players.find((player) => player.team === "home")!.kit;
   const awayKit = players.find((player) => player.team === "away")!.kit;
-  const selectedHighlight = highlights.find((highlight) => highlight.id === selectedHighlightId) || highlights[0];
-  const replayProgress = Math.max(0, Math.min(1, (second - selectedHighlight.startSecond) / (selectedHighlight.endSecond - selectedHighlight.startSecond)));
+  const selectedHighlight = highlights.find((highlight) => highlight.id === selectedHighlightId) || highlights[0] || { 
+    id: 'default', 
+    startSecond: 0, 
+    endSecond: MAX_SECONDS,
+    second: 0,
+    eventId: '',
+    team: 'home' as const,
+    title: 'Match replay',
+    scorer: '',
+    playerId: 1,
+    txlinePlayerId: 0,
+    score: '0-0',
+    goalType: 'Shot'
+  };
+  const replayProgress = selectedHighlight ? Math.max(0, Math.min(1, (second - selectedHighlight.startSecond) / (selectedHighlight.endSecond - selectedHighlight.startSecond))) : 0;
   const liveOrbitAngle = camera === "Orbit" && playing ? (orbitAngle + replayProgress * 42) % 360 : orbitAngle;
 
   const toggleLayer = (key: LayerKey) => setLayers((current) => ({ ...current, [key]: !current[key] }));
