@@ -5,14 +5,15 @@ Interactive football replay and match-intelligence MVP built with Next.js, TxLIN
 ## What is implemented
 
 - Interactive pitch replay with play/pause, speed, timeline scrubbing, camera presets, player selection, and tactical overlays.
-- Match events modeled from the supplied raw TxLINE fixture `18209181` capture.
+- **Hardcoded France vs Morocco (fixture 18209181)** as the default match with full replay data - always works without TxLINE credentials.
 - **Dynamic fixture loading**: Click any match in the "Recent Matches" list to load and display that fixture's data from TxLINE.
-- **Real-time data integration**: Fetches live fixture list and individual match data from TxLINE API.
+- **Real-time data integration**: Fetches live fixture list and individual match data from TxLINE API when credentials are configured.
 - **Automatic data parsing**: Parses TxLINE event-stream format to extract teams, scores, events, goals, and lineups.
+- **Save & Share Replay Moments**: Connect Phantom wallet to save replay moments on Solana blockchain and share on Twitter.
 - Server-only TxLINE credential handling and historical-score proxy.
-- Automatic demo fallback when TxLINE credentials are not configured.
+- **Graceful demo fallback**: Works perfectly without TxLINE credentials using hardcoded France vs Morocco data.
 - Phantom and Solflare wallet connections on Solana devnet.
-- Wallet-signed replay proof message.
+- Wallet-signed replay proof message and on-chain moment storage.
 - Responsive replay studio, tactical analyst, metrics, event timeline, and match explorer.
 
 TxLINE provides match events, scores, odds, and validation data. The supplied captures do not contain continuous player coordinates, so the MVP labels its player movement as reconstructed rather than provider-authentic.

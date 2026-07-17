@@ -36,7 +36,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { ballAt, events as defaultEvents, formatClock, highlights as defaultHighlights, matches, nearestEvent, playerAt, players as defaultPlayers, type JerseyKit, type MatchEvent, type MatchEventType, type MatchHighlight, type MatchSummary, type Player } from "@/lib/fieldtracer";
+import { ballAt, events, formatClock, highlights, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEvent, type MatchEventType, type MatchHighlight, type MatchSummary, type Player } from "@/lib/fieldtracer";
 import { parseTxLineFixture, type ParsedFixtureData } from "@/lib/txline-parser";
 import { saveReplayMoment, type ReplayMoment } from "@/lib/replay-moments";
 
@@ -148,26 +148,19 @@ export function FieldTracerApp() {
   const [selectedFixtureId, setSelectedFixtureId] = useState(18209181);
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [currentFixtureData, setCurrentFixtureData] = useState<ParsedFixtureData | null>(null);
-  const [selectedHighlightId, setSelectedHighlightId] = useState(defaultHighlights[1].id);
+  const [selectedHighlightId, setSelectedHighlightId] = useState(highlights[1].id);
   const [showSaveMomentDialog, setShowSaveMomentDialog] = useState(false);
   const [savingMoment, setSavingMoment] = useState(false);
   const [savedMoment, setSavedMoment] = useState<ReplayMoment | null>(null);
   const frameRef = useRef<number | null>(null);
   const previousRef = useRef<number>(0);
 
-  // Use current fixture data or fall back to defaults
-  // Always use defaults for the France vs Morocco match (18209181)
+  // Use loaded fixture data if available AND if it's not the default France match
+  // For France vs Morocco (18209181), always use the hardcoded data from fieldtracer.ts
   const activeMatch = currentFixtureData?.match || matches[0];
-  const events = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.events : defaultEvents;
-  const highlights = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.highlights : defaultHighlights;
-  const players = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.players : defaultPlayers;
-
-  // Initialize selectedHighlightId when highlights change
-  useEffect(() => {
-    if (highlights.length > 0 && !highlights.find(h => h.id === selectedHighlightId)) {
-      setSelectedHighlightId(highlights[0].id);
-    }
-  }, [highlights, selectedHighlightId]);
+  const activeEvents = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.events : events;
+  const activeHighlights = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.highlights : highlights;
+  const activePlayers = (currentFixtureData && currentFixtureData.match.fixtureId !== 18209181) ? currentFixtureData.players : players;
 
   useEffect(() => {
     fetch("/api/txline/status").then((response) => response.json()).then(setStatus).catch(() => undefined);
@@ -237,7 +230,7 @@ export function FieldTracerApp() {
       previousRef.current = now;
       setSecond((current) => {
         const next = current + delta * speed * 9;
-        const selectedHighlight = highlights.find((highlight) => highlight.id === selectedHighlightId);
+        const selectedHighlight = activeHighlights.find((highlight) => highlight.id === selectedHighlightId);
         const insideHighlight = selectedHighlight && current >= selectedHighlight.startSecond - 1 && current <= selectedHighlight.endSecond;
         const replayEnd = camera === "Orbit" && insideHighlight ? selectedHighlight.endSecond : MAX_SECONDS;
         if (next >= replayEnd) {
@@ -251,30 +244,17 @@ export function FieldTracerApp() {
     previousRef.current = performance.now();
     frameRef.current = requestAnimationFrame(tick);
     return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
-  }, [camera, playing, selectedHighlightId, speed]);
+  }, [camera, playing, selectedHighlightId, speed, activeHighlights]);
 
   const currentEvent = useMemo(() => nearestEvent(second), [second]);
   const ball = useMemo(() => ballAt(second), [second]);
-  const positions = useMemo(() => players.map((player) => ({ player, ...playerAt(player, second) })), [second]);
+  const positions = useMemo(() => activePlayers.map((player) => ({ player, ...playerAt(player, second) })), [second, activePlayers]);
   const inspectedPlayerId = hoveredPlayer ?? selectedPlayer;
   const inspected = positions.find(({ player }) => player.id === inspectedPlayerId);
-  const homeKit = players.find((player) => player.team === "home")!.kit;
-  const awayKit = players.find((player) => player.team === "away")!.kit;
-  const selectedHighlight = highlights.find((highlight) => highlight.id === selectedHighlightId) || highlights[0] || { 
-    id: 'default', 
-    startSecond: 0, 
-    endSecond: MAX_SECONDS,
-    second: 0,
-    eventId: '',
-    team: 'home' as const,
-    title: 'Match replay',
-    scorer: '',
-    playerId: 1,
-    txlinePlayerId: 0,
-    score: '0-0',
-    goalType: 'Shot'
-  };
-  const replayProgress = selectedHighlight ? Math.max(0, Math.min(1, (second - selectedHighlight.startSecond) / (selectedHighlight.endSecond - selectedHighlight.startSecond))) : 0;
+  const homeKit = activePlayers.find((player) => player.team === "home")!.kit;
+  const awayKit = activePlayers.find((player) => player.team === "away")!.kit;
+  const selectedHighlight = activeHighlights.find((highlight) => highlight.id === selectedHighlightId) || activeHighlights[0];
+  const replayProgress = Math.max(0, Math.min(1, (second - selectedHighlight.startSecond) / (selectedHighlight.endSecond - selectedHighlight.startSecond)));
   const liveOrbitAngle = camera === "Orbit" && playing ? (orbitAngle + replayProgress * 42) % 360 : orbitAngle;
 
   const toggleLayer = (key: LayerKey) => setLayers((current) => ({ ...current, [key]: !current[key] }));
@@ -352,7 +332,7 @@ export function FieldTracerApp() {
   const runSearch = (value: string) => {
     setQuery(value);
     const lower = value.toLowerCase();
-    const target = events.find((event) => lower.includes(event.type) || lower.includes(event.title.toLowerCase().split(" ")[0]));
+    const target = activeEvents.find((event) => lower.includes(event.type) || lower.includes(event.title.toLowerCase().split(" ")[0]));
     if (target) jumpTo(target.second);
   };
 
@@ -444,7 +424,7 @@ export function FieldTracerApp() {
               <div className="highlight-source"><Database size={13} /> Goal time + scorer from TxLINE</div>
             </div>
             <div className="highlight-carousel">
-              {highlights.map((highlight, index) => (
+              {activeHighlights.map((highlight, index) => (
                 <article className={`highlight-card ${selectedHighlightId === highlight.id ? "selected" : ""}`} key={highlight.id}>
                   <button className="highlight-select" onClick={() => { setSelectedHighlightId(highlight.id); jumpTo(highlight.second); setSelectedPlayer(highlight.playerId); }}>
                     <span className="highlight-minute">{Math.floor(highlight.second / 60)}&prime;</span>
@@ -581,7 +561,7 @@ export function FieldTracerApp() {
           <div className="bottom-grid">
             <div className="timeline-card panel">
               <div className="section-title"><div><span className="eyebrow">MATCH SIGNAL</span><h3>Event timeline</h3></div><span className="legend"><i />France <i />Morocco</span></div>
-              <div className="momentum-chart"><div className="centerline" />{events.map((event) => <button key={event.id} style={{ left: `${event.second / MAX_SECONDS * 100}%`, height: `${18 + event.intensity * .46}px` }} className={`${event.team} ${event.type} ${currentEvent.id === event.id ? "active" : ""}`} onClick={() => jumpTo(event.second)}><span>{eventIcon[event.type]}</span></button>)}</div>
+              <div className="momentum-chart"><div className="centerline" />{activeEvents.map((event) => <button key={event.id} style={{ left: `${event.second / MAX_SECONDS * 100}%`, height: `${18 + event.intensity * .46}px` }} className={`${event.team} ${event.type} ${currentEvent.id === event.id ? "active" : ""}`} onClick={() => jumpTo(event.second)}><span>{eventIcon[event.type]}</span></button>)}</div>
               <div className="timeline-labels"><span>0′</span><span>15′</span><span>30′</span><span>HT</span><span>60′</span><span>75′</span><span>FT</span></div>
             </div>
             <div className="data-card panel"><div className="section-title"><div><span className="eyebrow">DATA PROVENANCE</span><h3>Replay integrity</h3></div><ShieldCheck size={20} /></div><div className="integrity-row"><span className={`status-orb ${status?.configured ? "live" : ""}`} /><div><strong>{status?.configured ? "Live TxLINE adapter" : "Demo adapter active"}</strong><span>{status?.message || "Checking server configuration…"}</span></div></div><button className="proof-button" disabled={!wallet.connected || proofState === "signing"} onClick={signReplay}><Wallet size={16} />{proofState === "signed" ? "Replay proof signed" : proofState === "signing" ? "Awaiting signature…" : wallet.connected ? "Sign replay proof" : "Connect wallet to sign"}</button></div>
