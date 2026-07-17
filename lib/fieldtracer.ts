@@ -34,9 +34,60 @@ export type Player = {
   name: string;
   number: number;
   team: "home" | "away";
+  countryCode: string;
+  kit: JerseyKit;
   x: number;
   y: number;
 };
+
+export type JerseyPattern = "solid" | "center-stripe" | "tricolor" | "vertical-stripes";
+
+export type JerseyKit = {
+  primary: string;
+  secondary: string;
+  accent: string;
+  shadow: string;
+  pattern: JerseyPattern;
+  source: "txline" | "country-fallback";
+};
+
+const txlineColors: Record<string, string> = {
+  red: "#d52232",
+  white: "#f7f8fc",
+  blue: "#2456c8",
+  green: "#138653",
+  black: "#171a24",
+  yellow: "#f2c62c",
+};
+
+const countryKits: Record<string, Omit<JerseyKit, "source">> = {
+  FRA: { primary: "#214fb8", secondary: "#ffffff", accent: "#ef3340", shadow: "#102b72", pattern: "tricolor" },
+  MAR: { primary: "#d52232", secondary: "#0e8f55", accent: "#25ce78", shadow: "#71101c", pattern: "center-stripe" },
+  ARG: { primary: "#f7f8fc", secondary: "#74c8ec", accent: "#d6ad35", shadow: "#3f8db8", pattern: "vertical-stripes" },
+};
+
+export function resolveJerseyKit(countryCode: string, txlineColor?: string): JerseyKit {
+  const country = countryKits[countryCode.toUpperCase()];
+  const feedColor = txlineColor ? txlineColors[txlineColor.toLowerCase()] : undefined;
+
+  if (country) {
+    return {
+      ...country,
+      primary: feedColor || country.primary,
+      source: feedColor ? "txline" : "country-fallback",
+    };
+  }
+
+  const primary = feedColor || "#f7f8fc";
+  return {
+    primary,
+    secondary: primary === txlineColors.white ? "#26324d" : "#f7f8fc",
+    accent: primary,
+    shadow: primary === txlineColors.white ? "#aeb6c8" : "#4b5264",
+    pattern: "solid",
+    source: feedColor ? "txline" : "country-fallback",
+  };
+}
 
 export const matches: MatchSummary[] = [
   { fixtureId: 18209181, home: "France", away: "Morocco", homeCode: "FRA", awayCode: "MAR", homeScore: 2, awayScore: 0, stage: "Round of 16", status: "Full time" },
@@ -68,8 +119,8 @@ const homeShape = [[7,50],[22,18],[20,39],[20,62],[22,82],[39,37],[39,64],[56,50
 const awayShape = [[93,50],[79,18],[81,39],[81,62],[79,82],[63,37],[63,64],[48,50],[36,22],[29,48],[36,78]];
 
 export const players: Player[] = [
-  ...homeShape.map(([x, y], index) => ({ id: index + 1, name: homeNames[index], number: [16,5,17,4,22,8,14,7,11,10,15][index], team: "home" as const, x, y })),
-  ...awayShape.map(([x, y], index) => ({ id: index + 12, name: awayNames[index], number: [1,2,5,6,3,4,8,7,17,19,16][index], team: "away" as const, x, y })),
+  ...homeShape.map(([x, y], index) => ({ id: index + 1, name: homeNames[index], number: [16,5,17,4,22,8,14,7,11,10,15][index], team: "home" as const, countryCode: "FRA", kit: resolveJerseyKit("FRA"), x, y })),
+  ...awayShape.map(([x, y], index) => ({ id: index + 12, name: awayNames[index], number: [1,2,5,6,3,4,8,7,17,19,16][index], team: "away" as const, countryCode: "MAR", kit: resolveJerseyKit("MAR"), x, y })),
 ];
 
 export function formatClock(seconds: number) {

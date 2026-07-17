@@ -29,7 +29,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { ballAt, events, formatClock, matches, nearestEvent, playerAt, players, type MatchEventType, type Player } from "@/lib/fieldtracer";
+import { ballAt, events, formatClock, matches, nearestEvent, playerAt, players, type JerseyKit, type MatchEventType, type Player } from "@/lib/fieldtracer";
 
 type Camera = "Tactical" | "Broadcast" | "Orbit";
 type LayerKey = "paths" | "network" | "pressure" | "offside";
@@ -67,6 +67,27 @@ function LayerButton({ active, label, onClick }: { active: boolean; label: strin
   return <button className={`layer-chip ${active ? "active" : ""}`} onClick={onClick}><span />{label}</button>;
 }
 
+function KitDetail({ kit }: { kit: JerseyKit }) {
+  if (kit.pattern === "vertical-stripes") {
+    return (
+      <g className="kit-detail">
+        <path style={{ fill: kit.secondary }} d="M-5.2-7 H-3 V7 H-5.2Z M-.9-9 H1.1 V8 H-.9Z M3.2-8 H5.2 V7 H3.2Z" />
+        <circle style={{ fill: kit.accent }} cx="2.8" cy="-4.2" r="1.2" />
+      </g>
+    );
+  }
+
+  if (kit.pattern === "tricolor") {
+    return <g className="kit-detail"><path style={{ fill: kit.secondary }} d="M-1.8-8 H-.25 V7 H-1.8Z"/><path style={{ fill: kit.accent }} d="M-.25-8 H1.8 V7 H-.25Z"/></g>;
+  }
+
+  if (kit.pattern === "center-stripe") {
+    return <g className="kit-detail"><path style={{ fill: kit.secondary }} d="M-1-8 H1 V7 H-1Z"/><circle style={{ fill: "none", stroke: kit.accent }} cx="0" cy="-3" r="2.2"/></g>;
+  }
+
+  return <path className="kit-detail solid-kit" style={{ fill: kit.secondary }} d="M-5-1 H5 V1 H-5Z" />;
+}
+
 function PlayerFigure({ player, selected }: { player: Player; selected: boolean }) {
   const skinTones = ["#f2c7a2", "#dca77c", "#a96f4f", "#704533"];
   const skin = skinTones[player.id % skinTones.length];
@@ -77,16 +98,12 @@ function PlayerFigure({ player, selected }: { player: Player; selected: boolean 
     <g className="humanoid" style={{ animationDelay: `${-(player.id % 8) * 0.17}s` }}>
       <ellipse className="player-shadow" cx="0" cy="12" rx="10" ry="4" />
       {selected && <circle r="20" className="selection-pulse" />}
-      <line className="limb leg" x1="-3" y1="5" x2={-stride} y2="15" />
-      <line className="limb leg" x1="3" y1="5" x2={stride} y2="15" />
-      <line className="limb arm" x1="-6" y1="-2" x2="-12" y2={armLift} />
-      <line className="limb arm" x1="6" y1="-2" x2="12" y2={-armLift} />
+      <line className="limb leg" style={{ stroke: player.kit.shadow }} x1="-3" y1="5" x2={-stride} y2="15" />
+      <line className="limb leg" style={{ stroke: player.kit.shadow }} x1="3" y1="5" x2={stride} y2="15" />
+      <line className="limb arm" style={{ stroke: player.kit.shadow }} x1="-6" y1="-2" x2="-12" y2={armLift} />
+      <line className="limb arm" style={{ stroke: player.kit.shadow }} x1="6" y1="-2" x2="12" y2={-armLift} />
       <path className="jersey" fill={`url(#${player.team}Jersey)`} d="M-7-7 L-3-10 L3-10 L7-7 L6 7 Q0 10-6 7 Z" />
-      {player.team === "home" ? (
-        <g className="kit-detail france-kit"><path d="M-1.8-8 H-.25 V7 H-1.8Z"/><path d="M-.25-8 H1.8 V7 H-.25Z"/></g>
-      ) : (
-        <g className="kit-detail morocco-kit"><path d="M-1-8 H1 V7 H-1Z"/><circle cx="0" cy="-3" r="2.2"/></g>
-      )}
+      <KitDetail kit={player.kit} />
       <path className="jersey-shine" d="M-5-6 Q-2-9 0-8 L-1 6 Q-4 6-5 4Z" />
       <circle className="player-head" cx="0" cy="-13" r="5" style={{ fill: skin }} />
       <ellipse className="head-shine" cx="-1.5" cy="-14.5" rx="1.6" ry="1.2" />
@@ -143,6 +160,8 @@ export function FieldTracerApp() {
   const ball = useMemo(() => ballAt(second), [second]);
   const positions = useMemo(() => players.map((player) => ({ player, ...playerAt(player, second) })), [second]);
   const selected = positions.find(({ player }) => player.id === selectedPlayer);
+  const homeKit = players.find((player) => player.team === "home")!.kit;
+  const awayKit = players.find((player) => player.team === "away")!.kit;
 
   const toggleLayer = (key: LayerKey) => setLayers((current) => ({ ...current, [key]: !current[key] }));
   const jumpTo = (value: number) => { setSecond(value); setPlaying(false); };
@@ -238,8 +257,8 @@ export function FieldTracerApp() {
                 <defs>
                   <radialGradient id="pressureHome"><stop offset="0" stopColor="#6dff8d" stopOpacity=".28"/><stop offset="1" stopColor="#6dff8d" stopOpacity="0"/></radialGradient>
                   <radialGradient id="pressureAway"><stop offset="0" stopColor="#ff806c" stopOpacity=".25"/><stop offset="1" stopColor="#ff806c" stopOpacity="0"/></radialGradient>
-                  <linearGradient id="homeJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3d76ff"/><stop offset=".55" stopColor="#153fa9"/><stop offset="1" stopColor="#071c61"/></linearGradient>
-                  <linearGradient id="awayJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ff6257"/><stop offset=".58" stopColor="#c51f2b"/><stop offset="1" stopColor="#6d0f1b"/></linearGradient>
+                  <linearGradient id="homeJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={homeKit.primary}/><stop offset=".58" stopColor={homeKit.primary}/><stop offset="1" stopColor={homeKit.shadow}/></linearGradient>
+                  <linearGradient id="awayJersey" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={awayKit.primary}/><stop offset=".58" stopColor={awayKit.primary}/><stop offset="1" stopColor={awayKit.shadow}/></linearGradient>
                   <filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                 </defs>
                 <rect className="pitch-ground" x="8" y="8" width="1034" height="664" rx="8" />
